@@ -4,24 +4,39 @@ set -e
 VERSION_FILE="stage1/_version.py"
 BRANCH="development"
 
-# 1. Parse current version and increment build number
-VERSION=$(grep '__version__' $VERSION_FILE | cut -d'"' -f2)
-CURRENT_BUILD=$(grep '__build__' $VERSION_FILE | cut -d'"' -f2)
-NEW_BUILD=$((CURRENT_BUILD + 1))
-BUILD_TAG="v${VERSION}-build.${NEW_BUILD}"
+# 1. Safely parse and increment build number using Python
+python3 -c '
+import re
 
-# 2. Update stage1/_version.py with the new build number
-cat <<EOF_INNER > $VERSION_FILE
-__version__ = "${VERSION}"
-__build__ = "${NEW_BUILD}"
+with open("stage1/_version.py", "r") as f:
+    content = f.read()
 
-def get_version_info():
-    return f"AI Pipeline v{__version__} (Build {__build__})"
-EOF_INNER
+# Find current build number (expecting integer string like "1", "2")
+match = re.search(r"__build__\s*=\s*\"(\d+)\"", content)
+if match:
+    old_build = int(match.group(1))
+    new_build = old_build + 1
+    content = content.replace(f"__build__ = \"{old_build}\"", f"__build__ = \"{new_build}\"")
+else:
+    new_build = 1
 
-echo "Updated $VERSION_FILE to Build ${NEW_BUILD}"
+v_match = re.search(r"__version__\s*=\s*\"([^\"]+)\"", content)
+version = v_match.group(1) if v_match else "2.0.0"
 
-# 3. Commit, Tag, and Push to GitHub
+with open("stage1/_version.py", "w") as f:
+    f.write(content)
+
+print(f"VERSION={version}")
+print(f"BUILD={new_build}")
+' > .bump_vars.env
+
+source .bump_vars.env
+rm .bump_vars.env
+
+BUILD_TAG="v${VERSION}-build.${BUILD}"
+echo "Updated $VERSION_FILE to Build ${BUILD}"
+
+# 2. Commit, Tag, and Push to GitHub
 git add .
 git commit -m "feat: add stage4 consistent avatar animation and auto-bump to ${BUILD_TAG}"
 git tag -a "${BUILD_TAG}" -m "Automated Build Release ${BUILD_TAG}"

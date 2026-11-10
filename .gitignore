@@ -1,0 +1,12 @@
+# Environments & Caches
+**/venv/
+**/__pycache__/
+*.pyc
+.cache/
+huggingface/
+
+# Heavy Media & Inputs/Outputs
+*.mp4
+*.wav
+**/speaker_refs/
+**/segments_diarized.json

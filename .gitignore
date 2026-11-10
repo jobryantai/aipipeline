@@ -10,3 +10,9 @@ huggingface/
 *.wav
 **/speaker_refs/
 **/segments_diarized.json
+
+# Ignore model checkpoints and pipeline outputs
+pretrained_weights/
+stage4_output/
+pipeline_output/
+*.mp4

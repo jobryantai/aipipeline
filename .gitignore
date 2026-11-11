@@ -1,18 +1,12 @@
-# Environments & Caches
-**/venv/
-**/__pycache__/
+# Python / Conda
+__pycache__/
 *.pyc
-.cache/
-huggingface/
+venv/
+animeenv/
 
-# Heavy Media & Inputs/Outputs
-*.mp4
-*.wav
-**/speaker_refs/
-**/segments_diarized.json
-
-# Ignore model checkpoints and pipeline outputs
+# Large binaries, weights, and output video files
 pretrained_weights/
-stage4_output/
 pipeline_output/
+stage1/
 *.mp4
+*.pkl

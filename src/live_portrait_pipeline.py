@@ -476,7 +476,7 @@ class LivePortraitPipeline(object):
             if flag_source_has_audio or flag_driving_has_audio:
                 # final result with concatenation
                 wfp_concat_with_audio = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat_with_audio.mp4')
-                audio_from_which_video = args.driving if ((flag_driving_has_audio and args.audio_priority == 'driving') or (not flag_source_has_audio)) else args.source
+                audio_from_which_video = args.driving if ((flag_driving_has_audio and getattr(args, 'audio_priority', 'driving') == 'driving') or (not flag_source_has_audio)) else args.source
                 log(f"Audio is selected from {audio_from_which_video}, concat mode")
                 add_audio_to_video(wfp_concat, audio_from_which_video, wfp_concat_with_audio)
                 os.replace(wfp_concat_with_audio, wfp_concat)
@@ -492,7 +492,7 @@ class LivePortraitPipeline(object):
             ######### build the final result #########
             if flag_source_has_audio or flag_driving_has_audio:
                 wfp_with_audio = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_with_audio.mp4')
-                audio_from_which_video = args.driving if ((flag_driving_has_audio and args.audio_priority == 'driving') or (not flag_source_has_audio)) else args.source
+                audio_from_which_video = args.driving if ((flag_driving_has_audio and getattr(args, 'audio_priority', 'driving') == 'driving') or (not flag_source_has_audio)) else args.source
                 log(f"Audio is selected from {audio_from_which_video}")
                 add_audio_to_video(wfp, audio_from_which_video, wfp_with_audio)
                 os.replace(wfp_with_audio, wfp)
@@ -515,4 +515,4 @@ class LivePortraitPipeline(object):
             log(f'Animated image: {wfp}')
             log(f'Animated image with concat: {wfp_concat}')
 
-        return wfp, wfp_concat
+        return wfp, wfp

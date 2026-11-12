@@ -1,17 +1,25 @@
+import argparse
 import os
 import sys
 import glob
+import time
 import cv2
+
+# CLI Argument Parser for Caching Threshold
+parser = argparse.ArgumentParser(description="AnimeGAN2 Video Inference Pipeline")
+parser.add_argument("--threshold", type=float, default=1.0, help="Frame difference cache threshold (default: 1.0)")
+args = parser.parse_args()
+
 import torch
 import numpy as np
 
-PIPELINE_DIR = "/mnt/d/aipipeline"
+PIPELINE_DIR = "/home/admin1/aipipeline"
 SUBMODULE_DIR = os.path.join(PIPELINE_DIR, "animegan2-pytorch")
 
 if SUBMODULE_DIR not in sys.path:
     sys.path.insert(0, SUBMODULE_DIR)
 
-print("[*] Importing official Generator from animegan2-pytorch repository...")
+print("[*] [v4.0] Loading official Generator from animegan2-pytorch...")
 from model import Generator
 
 weight_path = os.path.join(SUBMODULE_DIR, "weights/face_paint_512_v2.pt")
@@ -19,7 +27,7 @@ print(f"[*] Loading model weights from {weight_path}")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 net = Generator().to(device)
-net.load_state_dict(torch.load(weight_path, map_location=device))
+net.load_state_dict(torch.load(weight_path, map_location=device), strict=False)
 net.eval()
 
 raw_frames_dir = os.path.join(PIPELINE_DIR, "pipeline_output/stage3_raw_frames")
@@ -27,11 +35,14 @@ anime_frames_dir = os.path.join(PIPELINE_DIR, "pipeline_output/stage5_anime_fram
 os.makedirs(anime_frames_dir, exist_ok=True)
 
 frame_paths = sorted(glob.glob(os.path.join(raw_frames_dir, "*.jpg")))
-print(f"[*] Processing {len(frame_paths)} frames at 1080p with caching enabled...")
+total_frames = len(frame_paths)
+print(f"[*] Processing {total_frames} frames at 1080p with dynamic ETA tracking (v4.0)...")
 
 prev_raw_resized = None
 prev_out_img = None
 cache_hits = 0
+
+start_time = time.time()
 
 for idx, f_path in enumerate(frame_paths):
     img = cv2.imread(f_path)
@@ -48,11 +59,17 @@ for idx, f_path in enumerate(frame_paths):
 
     if prev_raw_resized is not None:
         diff = np.mean(np.abs(img_resized.astype(np.float32) - prev_raw_resized.astype(np.float32)))
-        if diff < 1.0:
+        if diff < args.threshold:
             cv2.imwrite(out_path, prev_out_img)
             cache_hits += 1
-            if (idx + 1) % 500 == 0:
-                print(f"Processed {idx + 1}/{len(frame_paths)} frames... (Cache hits: {cache_hits})")
+            current_frame_num = idx + 1
+            if current_frame_num % 100 == 0 or current_frame_num == total_frames:
+                elapsed = time.time() - start_time
+                fps = current_frame_num / elapsed if elapsed > 0 else 0
+                remaining_frames = total_frames - current_frame_num
+                eta_seconds = remaining_frames / fps if fps > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+                print(f"Progress: {current_frame_num}/{total_frames} ({(current_frame_num/total_frames)*100:.1f}%) | FPS: {fps:.2f} | Cache Hits: {cache_hits} | ETA: {eta_str}")
             continue
 
     img_t = img_resized.astype(np.float32) / 127.5 - 1.0
@@ -72,7 +89,14 @@ for idx, f_path in enumerate(frame_paths):
     prev_raw_resized = img_resized
     prev_out_img = out
     
-    if (idx + 1) % 500 == 0:
-        print(f"Processed {idx + 1}/{len(frame_paths)} frames... (Cache hits: {cache_hits})")
+    current_frame_num = idx + 1
+    if current_frame_num % 100 == 0 or current_frame_num == total_frames:
+        elapsed = time.time() - start_time
+        fps = current_frame_num / elapsed if elapsed > 0 else 0
+        remaining_frames = total_frames - current_frame_num
+        eta_seconds = remaining_frames / fps if fps > 0 else 0
+        eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+        print(f"Progress: {current_frame_num}/{total_frames} ({(current_frame_num/total_frames)*100:.1f}%) | FPS: {fps:.2f} | Cache Hits: {cache_hits} | ETA: {eta_str}")
 
-print(f"[*] Inference completed! Total cache hits (frames skipped/copied): {cache_hits}/{len(frame_paths)}")
+total_elapsed = time.time() - start_time
+print(f"[*] Inference completed in {total_elapsed/60:.2f} minutes! Total cache hits: {cache_hits}/{total_frames}")

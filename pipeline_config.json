@@ -1,0 +1,6 @@
+{
+  "version": "4.0",
+  "input_dir": "/mnt/d/aipipeline/input_videos",
+  "output_dir": "/mnt/d/aipipeline/pipeline_output",
+  "working_dir": "/home/admin1/aipipeline"
+}

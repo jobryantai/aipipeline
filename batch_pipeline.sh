@@ -34,7 +34,7 @@ for video in "$INPUT_DIR"/*.mp4; do
     ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
 
     # Step 2: Process, Dub, and Mux each chunk immediately
-    CHUNK_LIST_FILE="$VID_OUTPUT_DIR/processed_chunks.txt"
+    CHUNK_LIST_FILE="$CHUNKS_DIR/processed_chunks.txt"
     > "$CHUNK_LIST_FILE"
 
     for chunk in "$CHUNKS_DIR"/chunk_*.mp4; do
@@ -97,7 +97,7 @@ for video in "$INPUT_DIR"/*.mp4; do
     FINAL_MERGED_VIDEO="$OUTPUT_DIR/${basename_no_ext}_english_dubbed_anime.mp4"
     echo "[*] Merging all completed chunks into final production video..."
     
-    (cd "$CHUNKS_DIR" && ffmpeg -y -f concat -safe 0 -i "$CHUNK_LIST_FILE" -c copy "$FINAL_MERGED_VIDEO")
+    ffmpeg -y -f concat -safe 0 -i "$CHUNK_LIST_FILE" -c copy "$FINAL_MERGED_VIDEO"
 
     echo "[+] Successfully completed and merged: $FINAL_MERGED_VIDEO"
 done

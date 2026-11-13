@@ -1,75 +1,103 @@
 #!/bin/bash
 set -e
 
-# --- Environment Setup ---
 export INPUT_DIR="/mnt/d/aipipeline/input_videos"
 export OUTPUT_DIR="/mnt/d/aipipeline/pipeline_output"
-
-# Point directly to the virtual environment's python binary
 VENV_PYTHON="/mnt/d/aipipeline/animegan2-pytorch/venv/bin/python"
+CHUNK_DURATION=300 # 5 minutes in seconds
 
 if [ ! -f "$VENV_PYTHON" ]; then
     echo "[!] Error: Virtual environment python not found at $VENV_PYTHON" >&2
     exit 1
 fi
 
-echo "[*] Using Python binary: $VENV_PYTHON"
-
-# Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
 
-echo "[*] AnimeGANv2 Batch Pipeline v5.0 (Production) - Scanning in $INPUT_DIR..."
-
-# --- Multi-Video Batch Loop ---
 for video in "$INPUT_DIR"/*.mp4; do
-    # Skip if no matches found
     [ -e "$video" ] || continue
 
     filename=$(basename "$video")
     basename_no_ext="${filename%.*}"
 
-    echo "=================================================="
+    echo "==================================================="
     echo "[*] Processing Video: $basename_no_ext"
-    echo "=================================================="
+    echo "==================================================="
 
-    # Create isolated staging directories per video
     VID_OUTPUT_DIR="$OUTPUT_DIR/$basename_no_ext"
-    RAW_FRAMES="$VID_OUTPUT_DIR/stage3_raw_frames"
-    ANIME_FRAMES="$VID_OUTPUT_DIR/stage5_anime_frames"
+    CHUNKS_DIR="$VID_OUTPUT_DIR/chunks"
+    mkdir -p "$CHUNKS_DIR"
 
-    mkdir -p "$RAW_FRAMES"
-    mkdir -p "$ANIME_FRAMES"
+    INPUT_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$video")
 
-    # Stage 1: Extract frames from source video
-    echo "[*] Extracting raw frames..."
-    ffmpeg -y -i "$video" -q:v 2 "$RAW_FRAMES/%04d.jpg"
+    # Step 1: Split video into 5-minute chunks
+    echo "[*] Checking/Splitting video into 5-minute chunks..."
+    ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
 
-    # Stage 2: Run AnimeGANv2 Inference using venv python
-    echo "[*] Running AnimeGANv2 inference with cache & thresholding..."
-    "$VENV_PYTHON" /mnt/d/aipipeline/inference_1080p.py \
-        --input_dir "$RAW_FRAMES" \
-        --output_dir "$ANIME_FRAMES" \
-        --threshold 2.5
+    # Step 2: Process, Dub, and Mux each chunk immediately
+    CHUNK_LIST_FILE="$VID_OUTPUT_DIR/processed_chunks.txt"
+    > "$CHUNK_LIST_FILE"
 
-    # Stage 3: Dynamic Duration Detection & Flawless Muxing
-    echo "[*] Calculating exact video duration..."
-    INPUT_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$video")
-    echo "[*] Target Duration: ${INPUT_DURATION}s"
+    for chunk in "$CHUNKS_DIR"/chunk_*.mp4; do
+        [ -e "$chunk" ] || continue
+        chunk_name=$(basename "$chunk" .mp4)
+        echo "---------------------------------------------------"
+        echo "[*] Processing Chunk: $chunk_name"
+        echo "---------------------------------------------------"
 
-    echo "[*] Muxing final synchronized video..."
-    ffmpeg -y -framerate 30000/1001 \
-      -i "$ANIME_FRAMES/%04d.jpg" \
-      -i "$video" \
-      -c:v libx264 -pix_fmt yuv420p \
-      -fps_mode cfr \
-      -c:a aac -b:a 128k \
-      -filter_complex "[1:a]apad=whole_dur=${INPUT_DURATION}[aout]" \
-      -map 0:v:0 -map "[aout]" \
-      -t "$INPUT_DURATION" \
-      "$OUTPUT_DIR/${basename_no_ext}_anime_production.mp4"
+        CHUNK_OUT_DIR="$CHUNKS_DIR/$chunk_name"
+        RAW_FRAMES="$CHUNK_OUT_DIR/stage3_raw_frames"
+        ANIME_FRAMES="$CHUNK_OUT_DIR/stage5_anime_frames"
+        DUBBED_AUDIO="$CHUNK_OUT_DIR/${chunk_name}_english_dub.m4a"
+        CHUNK_PROCESSED_MP4="$CHUNK_OUT_DIR/${chunk_name}_anime.mp4"
+        
+        mkdir -p "$RAW_FRAMES" "$ANIME_FRAMES"
 
-    echo "[+] Successfully completed: ${basename_no_ext}_anime_production.mp4"
-    echo ""
+        # 2a. Extract raw frames for this chunk if needed
+        EXISTING_RAW=$(ls -1 "$RAW_FRAMES" 2>/dev/null | wc -l)
+        if [ "$EXISTING_RAW" -gt 0 ]; then
+            echo "[*] Found existing raw frames for $chunk_name. Skipping extraction."
+        else
+            ffmpeg -y -i "$chunk" -q:v 2 "$RAW_FRAMES/%04d.jpg"
+        fi
+
+        # 2b. Run AnimeGANv2 inference on this chunk
+        "$VENV_PYTHON" -u /mnt/d/aipipeline/inference_1080p.py \
+            --input_dir "$RAW_FRAMES" \
+            --output_dir "$ANIME_FRAMES" \
+            --threshold 2.5 \
+            --fp16
+
+        # 2c. Generate translated multi-speaker English dubbed audio for this chunk
+        if [ ! -f "$DUBBED_AUDIO" ]; then
+            echo "[*] Generating translated multi-speaker English audio for $chunk_name..."
+            "$VENV_PYTHON" -u /mnt/d/aipipeline/dub_chunk.py \
+                --input_video "$chunk" \
+                --output_audio "$DUBBED_AUDIO"
+        else
+            echo "[*] Found existing dubbed audio for $chunk_name. Skipping dubbing."
+        fi
+
+        # 2d. Mux with 16:9 4K widescreen padding and pitch-matched English audio
+        echo "[*] Muxing frames into 16:9 4K widescreen container with English audio..."
+        ffmpeg -y -framerate "$INPUT_FPS" \
+          -i "$ANIME_FRAMES/%04d.jpg" \
+          -i "$DUBBED_AUDIO" \
+          -vf "scale=-1:2160,pad=3840:2160:(ow-iw)/2:0" \
+          -c:v libx264 -pix_fmt yuv420p \
+          -c:a aac -map 0:v:0 -map 1:a:0 \
+          -shortest \
+          -fps_mode cfr \
+          "$CHUNK_PROCESSED_MP4"
+
+        echo "[+] Completed 16:9 4K widescreen anime chunk: $CHUNK_PROCESSED_MP4"
+        echo "file '$chunk_name/$(basename "$CHUNK_PROCESSED_MP4")'" >> "$CHUNK_LIST_FILE"
+    done
+
+    # Step 3: Merge all completed chunks into final production video
+    FINAL_MERGED_VIDEO="$OUTPUT_DIR/${basename_no_ext}_english_dubbed_anime.mp4"
+    echo "[*] Merging all completed chunks into final production video..."
+    
+    (cd "$CHUNKS_DIR" && ffmpeg -y -f concat -safe 0 -i "$CHUNK_LIST_FILE" -c copy "$FINAL_MERGED_VIDEO")
+
+    echo "[+] Successfully completed and merged: $FINAL_MERGED_VIDEO"
 done
-
-echo "[*] All batch processing tasks completed successfully!"

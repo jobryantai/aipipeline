@@ -1,12 +1,6 @@
-# Python / Conda
-__pycache__/
-*.pyc
-venv/
-animeenv/
-
-# Large binaries, weights, and output video files
-pretrained_weights/
+input_videos/
 pipeline_output/
-stage1/
 *.mp4
-*.pkl
+*.wav
+*.mp3
+*.jpg

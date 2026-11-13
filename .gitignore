@@ -4,3 +4,7 @@ pipeline_output/
 *.wav
 *.mp3
 *.jpg
+__pycache__/
+.cache/
+pipeline_output/
+test_output/

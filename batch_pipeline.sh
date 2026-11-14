@@ -13,11 +13,34 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-for video in "$INPUT_DIR"/*.mp4; do
-    [ -e "$video" ] || continue
-
-    filename=$(basename "$video")
+# ------------------------------------------------------------------
+# GOAL #2: RMVB Ingestion & Automatic Container Normalization
+# ------------------------------------------------------------------
+echo "[*] Scanning for input videos (.mp4, .rmvb, etc.)..."
+for raw_video in "$INPUT_DIR"/*; do
+    [ -e "$raw_video" ] || continue
+    
+    filename=$(basename "$raw_video")
+    ext="${filename##*.}"
     basename_no_ext="${filename%.*}"
+    
+    video="$raw_video"
+    
+    # If file is .rmvb, transcode/normalize to .mp4 container first
+    if [ "${ext,,}" = "rmvb" ]; then
+        normalized_mp4="$INPUT_DIR/${basename_no_ext}.mp4"
+        if [ ! -f "$normalized_mp4" ]; then
+            echo "[*] Detected .rmvb file: $filename. Normalizing to .mp4 container..."
+            ffmpeg -y -i "$raw_video" -c:v libx264 -crf 20 -c:a aac -b:a 192k "$normalized_mp4"
+            echo "[+] Successfully normalized .rmvb to: $normalized_mp4"
+        else
+            echo "[*] Normalized MP4 already exists for $filename. Using $normalized_mp4"
+        fi
+        video="$normalized_mp4"
+        basename_no_ext="${basename_no_ext}"
+    elif [ "${ext,,}" != "mp4" ]; then
+        continue
+    fi
 
     echo "==================================================="
     echo "[*] Processing Video: $basename_no_ext"
@@ -29,9 +52,15 @@ for video in "$INPUT_DIR"/*.mp4; do
 
     INPUT_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$video")
 
-    # Step 1: Split video into 5-minute chunks
-    echo "[*] Checking/Splitting video into 5-minute chunks..."
-    ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
+    # ------------------------------------------------------------------
+    # GOAL #3: Robust Auto-Splitting Check
+    # ------------------------------------------------------------------
+    if [ ! "$(ls -A "$CHUNKS_DIR"/chunk_*.mp4 2>/dev/null)" ]; then
+        echo "[*] No chunks found in $CHUNKS_DIR. Automatically splitting video into chunks..."
+        ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
+    else
+        echo "[*] Existing chunks detected in $CHUNKS_DIR. Skipping auto-splitting."
+    fi
 
     # Step 2: Process, Dub, and Mux each chunk immediately
     CHUNK_LIST_FILE="$CHUNKS_DIR/processed_chunks.txt"
@@ -49,23 +78,25 @@ for video in "$INPUT_DIR"/*.mp4; do
         ANIME_FRAMES="$CHUNK_OUT_DIR/stage5_anime_frames"
         DUBBED_AUDIO="$CHUNK_OUT_DIR/${chunk_name}_english_dub.m4a"
         CHUNK_PROCESSED_MP4="$CHUNK_OUT_DIR/${chunk_name}_anime.mp4"
-        
+
         mkdir -p "$RAW_FRAMES" "$ANIME_FRAMES"
 
-        # 2a. Extract raw frames for this chunk if needed
-        EXISTING_RAW=$(ls -1 "$RAW_FRAMES" 2>/dev/null | wc -l)
+        # ------------------------------------------------------------------
+        # GOAL #1 & #3: Dynamic Frame Generation with PAR Correction
+        # ------------------------------------------------------------------
+        EXISTING_RAW=$(ls -1 "$RAW_FRAMES"/*.jpg 2>/dev/null | wc -l)
         if [ "$EXISTING_RAW" -gt 0 ]; then
-            echo "[*] Found existing raw frames for $chunk_name. Skipping extraction."
+            echo "[*] Found $EXISTING_RAW existing raw frames for $chunk_name. Skipping extraction."
         else
-            ffmpeg -y -i "$chunk" -q:v 2 "$RAW_FRAMES/%04d.jpg"
+            echo "[*] Extracting raw frames dynamically with PAR correction (scale=iw*sar:ih,setsar=1)..."
+            ffmpeg -y -i "$chunk" -vf "scale=iw*sar:ih,setsar=1" -q:v 2 "$RAW_FRAMES/%04d.jpg"
         fi
 
         # 2b. Run AnimeGANv2 inference on this chunk
         "$VENV_PYTHON" -u /mnt/d/aipipeline/inference_1080p.py \
             --input_dir "$RAW_FRAMES" \
             --output_dir "$ANIME_FRAMES" \
-            --threshold 2.5 \
-            --fp16
+            --threshold 2.5
 
         # 2c. Generate translated multi-speaker English dubbed audio for this chunk
         if [ ! -f "$DUBBED_AUDIO" ]; then
@@ -96,7 +127,7 @@ for video in "$INPUT_DIR"/*.mp4; do
     # Step 3: Merge all completed chunks into final production video
     FINAL_MERGED_VIDEO="$OUTPUT_DIR/${basename_no_ext}_english_dubbed_anime.mp4"
     echo "[*] Merging all completed chunks into final production video..."
-    
+
     ffmpeg -y -f concat -safe 0 -i "$CHUNK_LIST_FILE" -c copy "$FINAL_MERGED_VIDEO"
 
     echo "[+] Successfully completed and merged: $FINAL_MERGED_VIDEO"

@@ -4,3 +4,6 @@ pipeline_output/
 *.wav
 *.mp3
 *.jpg
+pretrained_weights/
+pipeline_output/
+temp_segments/

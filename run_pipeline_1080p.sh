@@ -5,7 +5,7 @@ echo "=========================================="
 echo "[*] Starting Optimized 1080p Widescreen Anime Pipeline"
 echo "=========================================="
 
-PIPELINE_DIR="/mnt/d/aipipeline"
+PIPELINE_DIR="/mnt/c/aipipeline"
 SOURCE_VIDEO="$PIPELINE_DIR/stage1/final_dubbed_video.mp4"
 RAW_FRAMES_DIR="$PIPELINE_DIR/pipeline_output/stage3_raw_frames"
 ANIME_FRAMES_DIR="$PIPELINE_DIR/pipeline_output/stage5_anime_frames"

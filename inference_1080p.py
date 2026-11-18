@@ -15,24 +15,49 @@ parser.add_argument("--threshold", type=float, default=2.5)
 parser.add_argument("--fp16", action="store_true")
 args = parser.parse_args()
 
-PIPELINE_DIR = "/mnt/d/aipipeline"
+PIPELINE_DIR = "/mnt/c/aipipeline"
 SUBMODULE_DIR = os.path.join(PIPELINE_DIR, "animegan2-pytorch")
 if SUBMODULE_DIR not in sys.path:
     sys.path.insert(0, SUBMODULE_DIR)
 
-from model import Generator
+try:
+    from model import Generator
+except ImportError:
+    import sys, os
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "animegan2-pytorch")))
+    from model import Generator
 
-weight_path = os.path.join(SUBMODULE_DIR, "weights/face_paint_512_v2.pt")
+weight_path = os.path.join(SUBMODULE_DIR, "weights/hayao.pt")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 net = Generator().to(device)
-net.load_state_dict(torch.load(weight_path, map_location=device))
+checkpoint = torch.load(weight_path, map_location=device)
+if isinstance(checkpoint, dict):
+    if "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+    elif "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    else:
+        state_dict = checkpoint
+else:
+    state_dict = checkpoint
+
+# Strip "module." prefix if saved from DataParallel training
+cleaned_state_dict = {}
+for k, v in state_dict.items():
+    name = k[7:] if k.startswith("module.") else k
+    cleaned_state_dict[name] = v
+
+net.load_state_dict(cleaned_state_dict)
 
 if args.fp16:
     net = net.half()
 net.eval()
 
 os.makedirs(args.output_dir, exist_ok=True)
-frame_paths = sorted(glob.glob(os.path.join(args.input_dir, "*.jpg")))
+frame_paths = sorted([
+    os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir)
+    if f.lower().endswith(".jpg")
+])
 total_frames = len(frame_paths)
 
 existing_files = set(os.listdir(args.output_dir))

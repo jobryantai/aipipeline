@@ -1,6 +1,34 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+venv/
+venv_win/
+stage1/venv/
+.cache/
+
+# Model Weights & Binaries
+pretrained_weights/
+*.pt
+*.pth
+*.onnx
+
+# Media, Frames, and Outputs
 input_videos/
 pipeline_output/
+**/chunks/
+**/stage3_raw_frames/
+**/stage5_anime_frames/
 *.mp4
+*.rmvb
+*.avi
+*.mkv
+*.mov
 *.wav
-*.mp3
 *.jpg
+*.jpeg
+*.png
+
+# OS Files
+Thumbs.db
+.DS_Store
+*.wav

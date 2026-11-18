@@ -3,9 +3,9 @@ set -e
 
 echo "[*] Re-assembling video: scaling & padding 512x512 frames to 1920x1080..."
 
-INPUT_FRAMES="/mnt/d/aipipeline/pipeline_output/stage5_anime_frames"
-SOURCE_VIDEO="/mnt/d/aipipeline/stage1/final_dubbed_video.mp4"
-OUTPUT_VIDEO="/mnt/d/aipipeline/pipeline_output/final_anime_video.mp4"
+INPUT_FRAMES="/mnt/c/aipipeline/pipeline_output/stage5_anime_frames"
+SOURCE_VIDEO="/mnt/c/aipipeline/stage1/final_dubbed_video.mp4"
+OUTPUT_VIDEO="/mnt/c/aipipeline/pipeline_output/final_anime_video.mp4"
 
 # FFmpeg filter explanation:
 # 1. scale=ih*16/9:-1 -> scales height to match 1080 and adjusts width proportionally (or scale to fit height=1080)

@@ -80,8 +80,8 @@ for spk in unique_speakers:
             avg_pitch = np.median(valid_f0)
             # Typically, median F0 < 165 Hz is male, >= 165 Hz is female
             if avg_pitch < 165:
-                speaker_voices[spk] = "en-US-GuyNeural" # Male voice
-                print(f"[*] Speaker {spk} detected as Male (Pitch: {avg_pitch:.1f}Hz) -> Assigned GuyNeural", flush=True)
+                speaker_voices[spk] = "en-US-en-US-GuyNeural" # Male voice
+                print(f"[*] Speaker {spk} detected as Male (Pitch: {avg_pitch:.1f}Hz) -> Assigned en-US-GuyNeural", flush=True)
             else:
                 speaker_voices[spk] = "en-US-AriaNeural" # Female voice
                 print(f"[*] Speaker {spk} detected as Female (Pitch: {avg_pitch:.1f}Hz) -> Assigned AriaNeural", flush=True)

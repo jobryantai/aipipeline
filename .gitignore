@@ -1,0 +1,26 @@
+# Video Files
+*.mp4
+*.rmvb
+*.avi
+*.mkv
+*.mov
+
+# Image Files & Frame Extracts
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Directories for Inputs, Outputs, and Extracted Frames
+input_videos/
+pipeline_output/
+**/stage3_raw_frames/
+**/stage5_anime_frames/
+**/chunks/
+
+# Python Cache & Temp Files
+__pycache__/
+*.py[cod]
+.cache/
+pretrained_weights/
+stage1/

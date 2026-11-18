@@ -9,6 +9,6 @@ if [ ! -d "/home/admin1/miniconda/envs/animeenv" ]; then
 fi
 
 echo "[*] Environment verified. Running pre-flight checks..."
-/mnt/d/aipipeline/preflight_check.sh
+/mnt/c/aipipeline/preflight_check.sh
 
 echo "[*] Ready to execute pipeline!"

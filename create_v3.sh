@@ -5,7 +5,7 @@ echo "=========================================="
 echo "[*] Setting up AnimeGAN2 Pipeline v3 Release"
 echo "=========================================="
 
-cd /mnt/d/aipipeline
+cd /mnt/c/aipipeline
 
 # 1. Configure Git
 echo "[*] Configuring Git identity for RT..."
@@ -60,7 +60,7 @@ else
 fi
 
 # 3. Check Input Frames Directory & Count
-FRAME_DIR="/mnt/d/aipipeline/pipeline_output/stage5_anime_frames"
+FRAME_DIR="/mnt/c/aipipeline/pipeline_output/stage5_anime_frames"
 echo -n "[*] Checking stylized frames in $FRAME_DIR... "
 if [ -d "$FRAME_DIR" ]; then
     FRAME_COUNT=$(find "$FRAME_DIR" -type f \( -name "*.jpg" -o -name "*.JPG" -o -name "*.jpeg" -o -name "*.png" \) | wc -l)
@@ -75,7 +75,7 @@ else
 fi
 
 # 4. Check Audio Source
-AUDIO_PATH="/mnt/d/aipipeline/stage1/final_dubbed_video.mp4"
+AUDIO_PATH="/mnt/c/aipipeline/stage1/final_dubbed_video.mp4"
 echo -n "[*] Checking audio source ($AUDIO_PATH)... "
 if [ -f "$AUDIO_PATH" ]; then
     echo "FOUND."
@@ -97,9 +97,9 @@ set -e
 
 echo "[*] Re-assembling video with explicit stream mapping..."
 
-INPUT_FRAMES="/mnt/d/aipipeline/pipeline_output/stage5_anime_frames"
-AUDIO_SOURCE="/mnt/d/aipipeline/stage1/final_dubbed_video.mp4"
-OUTPUT_VIDEO="/mnt/d/aipipeline/pipeline_output/final_anime_video.mp4"
+INPUT_FRAMES="/mnt/c/aipipeline/pipeline_output/stage5_anime_frames"
+AUDIO_SOURCE="/mnt/c/aipipeline/stage1/final_dubbed_video.mp4"
+OUTPUT_VIDEO="/mnt/c/aipipeline/pipeline_output/final_anime_video.mp4"
 
 ffmpeg -y \
        -framerate 30 -i "$INPUT_FRAMES/%04d.jpg" \
@@ -125,7 +125,7 @@ if [ ! -d "/home/admin1/miniconda/envs/animeenv" ]; then
 fi
 
 echo "[*] Environment verified. Running pre-flight checks..."
-/mnt/d/aipipeline/preflight_check.sh
+/mnt/c/aipipeline/preflight_check.sh
 
 echo "[*] Ready to execute pipeline!"
 RECOVER_EOF

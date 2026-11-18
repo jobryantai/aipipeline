@@ -20,7 +20,7 @@ else
 fi
 
 # 3. Check Input Frames Directory & Count
-FRAME_DIR="/mnt/d/aipipeline/pipeline_output/stage5_anime_frames"
+FRAME_DIR="/mnt/c/aipipeline/pipeline_output/stage5_anime_frames"
 echo -n "[*] Checking stylized frames in $FRAME_DIR... "
 if [ -d "$FRAME_DIR" ]; then
     FRAME_COUNT=$(find "$FRAME_DIR" -type f \( -name "*.jpg" -o -name "*.JPG" -o -name "*.jpeg" -o -name "*.png" \) | wc -l)
@@ -35,7 +35,7 @@ else
 fi
 
 # 4. Check Audio Source
-AUDIO_PATH="/mnt/d/aipipeline/stage1/final_dubbed_video.mp4"
+AUDIO_PATH="/mnt/c/aipipeline/stage1/final_dubbed_video.mp4"
 echo -n "[*] Checking audio source ($AUDIO_PATH)... "
 if [ -f "$AUDIO_PATH" ]; then
     echo "FOUND."

@@ -87,8 +87,8 @@ for video in "$INPUT_DIR"/*.{mp4,mpg}; do
           -i "$DUBBED_AUDIO" \
           -i "$chunk" \
           -filter_complex "[2:a]volume=0.15[orig_bg];[1:a][orig_bg]amix=inputs=2:duration=first[aout]" \
-          -vf "scale=-1:2160,pad=3840:2160:(ow-iw)/2:0" \
-          -c:v libx264 -pix_fmt yuv420p \
+          -vf "scale=-1:2160,pad=3840:2160:(ow-iw)/2:0:color=black,format=yuv420p" \
+          -c:v h264_nvenc -preset p7 -cq 19 -pix_fmt yuv420p \
           -c:a aac -map 0:v:0 -map "[aout]" \
           -shortest \
           -fps_mode cfr \

@@ -43,6 +43,40 @@ av.open = _patched_av_open
 import argparse
 import subprocess
 import torch
+import torchaudio
+import soundfile as _sf
+
+# --- torchaudio>=2.9 removed built-in I/O (needs torchcodec); route through soundfile ---
+import argparse
+import subprocess
+import torch
+import torchaudio
+import soundfile as _sf
+import os
+
+def _ta_load(path, *args, **kwargs):
+    data, sr = _sf.read(str(path), dtype="float32", always_2d=True)
+    return torch.from_numpy(data.T.copy()), sr
+
+def _ta_save(path, src, sample_rate, *args, **kwargs):
+    arr = src.detach().cpu().numpy()
+    if arr.ndim == 1:
+        arr = arr[None, :]
+    
+    path_str = str(path)
+    if path_str.endswith(".m4a") or path_str.endswith(".mp3"):
+        # Soundfile cannot write m4a/mp3 directly; write to temp wav first, then convert with ffmpeg
+        temp_wav = path_str + ".tmp.wav"
+        _sf.write(temp_wav, arr.T, sample_rate)
+        subprocess.run(["ffmpeg", "-y", "-i", temp_wav, "-c:a", "aac", "-b:a", "192k", path_str], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.path.exists(temp_wav):
+            os.remove(temp_wav)
+    else:
+        _sf.write(path_str, arr.T, sample_rate)
+
+torchaudio.load = _ta_load
+torchaudio.save = _ta_save
+# ---------------------------------------------------------------------------------------
 from faster_whisper import WhisperModel
 from TTS.api import TTS
 import torchaudio
@@ -68,7 +102,7 @@ def main():
     print("[*] Step 1: Extracting audio track from video...")
     extract_audio(args.input_video, full_audio)
 
-    print("[*] Step 2: Loading faster-whisper (large-v3) for Cantonese -> English translation...")
+    print("[*] Step 2: Loading faster-whisper (large-v3) with auto-language detection for Japanese -> English translation...")
     whisper_model = WhisperModel("large-v3", device=device, compute_type="float16")
     segments, info = whisper_model.transcribe(full_audio, task="translate", beam_size=5)
     
@@ -79,7 +113,13 @@ def main():
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
     print("[*] Step 4: Loading full audio tensor for utterance-level voice cloning...")
-    audio_tensor, sr = torchaudio.load(full_audio)
+    import soundfile as sf
+    data, sr = sf.read(full_audio)
+    # Ensure tensor shape is [channel, time] matching torchaudio standard
+    if data.ndim == 1:
+        audio_tensor = torch.tensor(data, dtype=torch.float32).unsqueeze(0)
+    else:
+        audio_tensor = torch.tensor(data, dtype=torch.float32).T
 
     probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", args.input_video]
     total_duration = float(subprocess.check_output(probe_cmd).decode().strip())
@@ -102,6 +142,9 @@ def main():
             orig_end_sample = min(audio_tensor.shape[1], orig_start_sample + min_samples)
         
         ref_segment_tensor = audio_tensor[:, orig_start_sample:orig_end_sample]
+        if ref_segment_tensor.numel() == 0 or ref_segment_tensor.abs().max() < 1e-5:
+            # Fallback to beginning of audio if slice is empty or silent
+            ref_segment_tensor = audio_tensor[:, :int(sr * 2)]
         
         # Save temporary utterance reference wav for this specific line
         utterance_ref_path = os.path.join(temp_dir, f"ref_utterance_{i:04d}.wav")
@@ -117,7 +160,9 @@ def main():
                 file_path=seg_wav_path
             )
             
-            wav_tensor, _ = torchaudio.load(seg_wav_path)
+            wav_tensor, _wsr = torchaudio.load(seg_wav_path)
+            if _wsr != 22050:
+                wav_tensor = torchaudio.functional.resample(wav_tensor, _wsr, 22050)
             start_sample = int(seg.start * 22050)
             end_sample = start_sample + wav_tensor.shape[1]
             

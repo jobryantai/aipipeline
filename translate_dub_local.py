@@ -24,7 +24,7 @@ lib_patterns = [
 ]
 for pattern in lib_patterns:
     for lib_path in glob.glob(pattern):
-        if any(name in lib_path for name in ["libcublas.so", "libcudnn.so", "libcusparse.so", "libcurand.so", "libcusolver.so"]):
+        if "/nvidia/cu13/" not in lib_path and any(name in lib_path for name in ["libcublas.so", "libcudnn.so", "libcusparse.so", "libcurand.so", "libcusolver.so"]):
             try:
                 ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
             except Exception:

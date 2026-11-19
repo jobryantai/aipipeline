@@ -6,6 +6,9 @@ export OUTPUT_DIR="/mnt/c/aipipeline/pipeline_output"
 VENV_PYTHON="/mnt/c/aipipeline/animegan2-pytorch/venv/bin/python"
 CHUNK_DURATION=300 # 5 minutes in seconds
 
+# Match files case-insensitively; unmatched globs expand to nothing instead of a literal string
+shopt -s nullglob nocaseglob
+
 if [ ! -f "$VENV_PYTHON" ]; then
     echo "[!] Error: Virtual environment python not found at $VENV_PYTHON" >&2
     exit 1
@@ -13,11 +16,16 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-for video in "$INPUT_DIR"/*.{mp4,mpg}; do
-    [ -e "$video" ] || continue
+VIDEOS=("$INPUT_DIR"/*.{mp4,mpg,avi,mkv,mov})
+if [ "${#VIDEOS[@]}" -eq 0 ]; then
+    echo "[!] No videos (mp4, mpg, avi, mkv, mov) found in $INPUT_DIR" >&2
+    exit 1
+fi
 
+for video in "${VIDEOS[@]}"; do
     filename=$(basename "$video")
     basename_no_ext="${filename%.*}"
+    ext_lower=$(echo "${filename##*.}" | tr '[:upper:]' '[:lower:]')
 
     echo "==================================================="
     echo "[*] Processing Video: $basename_no_ext"
@@ -29,16 +37,27 @@ for video in "$INPUT_DIR"/*.{mp4,mpg}; do
 
     INPUT_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=noprint_wrappers=1:nokey=1 "$video")
 
-    # Step 1: Split video into 5-minute chunks
+    # Step 1: Split video into 5-minute MP4 chunks
     echo "[*] Checking/Splitting video into 5-minute chunks..."
-    ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
+    if [ "$ext_lower" = "mp4" ]; then
+        # MP4 can be stream-copied directly
+        ffmpeg -y -i "$video" -c copy -map 0 -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 "$CHUNKS_DIR/chunk_%03d.mp4"
+    else
+        # AVI/MKV/MOV/MPG codecs may not fit in MP4 -> re-encode to H.264/AAC while splitting
+        ffmpeg -y -i "$video" \
+          -map "0:v:0" -map "0:a:0?" \
+          -c:v h264_nvenc -preset p5 -cq 19 -pix_fmt yuv420p \
+          -c:a aac -b:a 192k \
+          -force_key_frames "expr:gte(t,n_forced*$CHUNK_DURATION)" \
+          -f segment -segment_time $CHUNK_DURATION -reset_timestamps 1 \
+          "$CHUNKS_DIR/chunk_%03d.mp4"
+    fi
 
     # Step 2: Process, Dub, and Mux each chunk immediately
     CHUNK_LIST_FILE="$CHUNKS_DIR/processed_chunks.txt"
     > "$CHUNK_LIST_FILE"
 
-    for chunk in "$CHUNKS_DIR"/chunk_*.{mp4,mpg}; do
-        [ -e "$chunk" ] || continue
+    for chunk in "$CHUNKS_DIR"/chunk_*.mp4; do
         chunk_name=$(basename "$chunk" .mp4)
         echo "---------------------------------------------------"
         echo "[*] Processing Chunk: $chunk_name"
